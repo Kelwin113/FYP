@@ -276,6 +276,7 @@ recipes = pd.read_csv('Data/recipes_cleaned.csv')
 reviews_train, reviews_test = train_test_split(reviews, test_size=0.3, random_state=42)
 
 # Find the top 10 AuthorId with the most reviews
+st.write(reviews.columns)
 top_10_authors = reviews['AuthorId'].value_counts().nlargest(10)
 top_10_author_ids = top_10_authors.index.tolist()
 
