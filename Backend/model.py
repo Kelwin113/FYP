@@ -8,6 +8,7 @@ from sklearn.metrics.pairwise import linear_kernel
 from gensim.models import Word2Vec
 from nltk.tokenize import word_tokenize
 from sklearn.model_selection import train_test_split
+import gdown
 
 # Model 1 - SVD User-Based Collaborate Filtering
 @st.cache_data
@@ -269,15 +270,22 @@ def get_reviews(selected_author_id, n):
 def get_recipes(result):
     return recipes[recipes['RecipeId'].isin(result['RecipeId'].tolist())]
 
-reviews = pd.read_csv('Data/reviews_cleaned.csv')
-recipes = pd.read_csv('Data/recipes_cleaned.csv')
+# reviews = pd.read_csv('Data/reviews_cleaned.csv')
+# recipes = pd.read_csv('Data/recipes_cleaned.csv')
+
+url1 = "https://drive.google.com/file/d/1n7rzM6lROJO4UCneA2gXsE3MFTrAuJbQ/view?usp=sharing"
+gdown.download(url=url1, output = 'recipes_cleaned.csv', fuzzy=True)
+
+url2 = "https://drive.google.com/file/d/1_7UYJTO5aH9EMPwWZVWdq2lNk7UwodLL/view?usp=sharing"
+gdown.download(url=url2, output = 'reviews_cleaned.csv', fuzzy=True)
+
+reviews = pd.read_csv('reviews_cleaned.csv')
+recipes = pd.read_csv('recipes_cleaned.csv')
 
 # Split and sample the datasets
 reviews_train, reviews_test = train_test_split(reviews, test_size=0.3, random_state=42)
 
 # Find the top 10 AuthorId with the most reviews
-st.write(reviews.columns)
-st.write(recipes.columns)
 top_10_authors = reviews['AuthorId'].value_counts().nlargest(10)
 top_10_author_ids = top_10_authors.index.tolist()
 
