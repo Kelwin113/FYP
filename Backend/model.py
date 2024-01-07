@@ -269,27 +269,15 @@ def get_reviews(selected_author_id, n):
 def get_recipes(result):
     return recipes[recipes['RecipeId'].isin(result['RecipeId'].tolist())]
 
-# reviews = pd.read_csv('Data/reviews_cleaned.csv')
-# recipes = pd.read_csv('Data/recipes_cleaned.csv')
-
-from pathlib import Path
-
-# Get the directory where the script is located
-script_directory = Path(__file__).parent
-
-# Assuming your 'Data' folder is in the same directory as your script
-reviews_path = script_directory / 'Data' / 'reviews_cleaned.csv'
-recipes_path = script_directory / 'Data' / 'recipes_cleaned.csv'
-
-# Read the CSV files
-reviews = pd.read_csv(reviews_path)
-recipes = pd.read_csv(recipes_path)
+reviews = pd.read_csv('Data/reviews_cleaned.csv')
+recipes = pd.read_csv('Data/recipes_cleaned.csv')
 
 # Split and sample the datasets
 reviews_train, reviews_test = train_test_split(reviews, test_size=0.3, random_state=42)
 
 # Find the top 10 AuthorId with the most reviews
 st.write(reviews.columns)
+st.write(recipes.columns)
 top_10_authors = reviews['AuthorId'].value_counts().nlargest(10)
 top_10_author_ids = top_10_authors.index.tolist()
 
