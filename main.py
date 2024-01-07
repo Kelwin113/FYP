@@ -2,21 +2,10 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from PIL import Image
-from pathlib import Path
-
-# Assuming the image is in the same directory as your script
-image_path = Path("Resources/Logo3.png")
-
-# Open the image using the full path
-image1 = Image.open(image_path)
-
-# Use the image in your Streamlit app
-st.sidebar.image(image1, use_column_width=True)
 
 # Main App
 # st.set_page_config(page_title="TasteBuddy", page_icon="Resources/Icon.ico")
-# st.sidebar.image("Resources/Logo3.png", use_column_width=True)
+st.sidebar.image("Logo3.png", use_column_width=True)
 # image_path = os.path.join(os.path.dirname(__file__), "Resources/Logo3.png")
 # st.sidebar.image(image_path, use_column_width=True)
 page_options = ["Home Page","User Profile","Algorithm","Hybrid Food Recommender"]
