@@ -5,7 +5,7 @@ import numpy as np
 
 # Main App
 st.set_page_config(page_title="TasteBuddy", page_icon="Resources/Icon.ico")
-st.sidebar.image("Resources/Logo3.png", use_column_width=True)
+st.sidebar.image("Resources/Logo2.png", use_column_width=True)
 page_options = ["Home Page","User Profile","Algorithm","Hybrid Food Recommender"]
 page_selection = st.sidebar.selectbox("Choose Option", page_options)
 
