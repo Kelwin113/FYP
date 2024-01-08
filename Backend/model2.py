@@ -13,6 +13,11 @@ import gdown
 # Model 1 - SVD User-Based Collaborate Filtering
 @st.cache_data
 def model1(selected_author_id, top_n=20):
+    # Load the SVD model from the pickle file
+    svd_model_filename = 'Resources/svd_model.pkl'
+    with open(svd_model_filename, 'rb') as svd_file:
+        svd_model_pkl = pickle.load(svd_file)
+
     rated_reviews = reviews_train[reviews_train['AuthorId'] == selected_author_id]
     unrated_reviews = reviews_train[reviews_train['AuthorId'] != selected_author_id]
 
@@ -150,7 +155,12 @@ def model2(selected_author_id, top_n=20):
 # Final Hybrid Model
 @st.cache_data 
 def final_model(selected_author_id, svd_result_df, word2vec_result_df, final_n=20):
-   
+    # Load the SVD model from the pickle file
+    svd_model_filename = 'Resources/svd_model.pkl'
+    with open(svd_model_filename, 'rb') as svd_file:
+        svd_model_pkl = pickle.load(svd_file)
+
+    
     # combined_recommendations = [RecipeId for _, RecipeId, _ in svd_result] + word2vec_result['RecipeId'].tolist()
     combined_recommendations = svd_result_df['RecipeId'].tolist() + word2vec_result_df['RecipeId'].tolist()
 
@@ -260,27 +270,8 @@ def get_reviews(selected_author_id, n):
 def get_recipes(result):
     return recipes[recipes['RecipeId'].isin(result['RecipeId'].tolist())]
 
-url1 = "https://drive.google.com/file/d/1n7rzM6lROJO4UCneA2gXsE3MFTrAuJbQ/view?usp=sharing"
-gdown.download(url=url1, output = 'recipes_cleaned.csv', fuzzy=True)
-
-url2 = "https://drive.google.com/file/d/1_7UYJTO5aH9EMPwWZVWdq2lNk7UwodLL/view?usp=sharing"
-gdown.download(url=url2, output = 'reviews_cleaned.csv', fuzzy=True)
-
-url3 = "https://drive.google.com/file/d/12x6hmh8rRAA9pLxXeQN0csTOQE6QPi0a/view?usp=sharing"
-gdown.download(url=url3, output = 'svd_model.pkl', fuzzy=True)
-
-reviews = pd.read_csv('reviews_cleaned.csv')
-recipes = pd.read_csv('recipes_cleaned.csv')
-
-# Load the SVD model from the pickle file
-svd_model_filename = 'svd_model.pkl'
-with open(svd_model_filename, 'rb') as svd_file:
-    svd_model_pkl = pickle.load(svd_file)
-
-nltk.download('punkt')
-
-# reviews = pd.read_csv('Data/reviews_cleaned.csv')
-# recipes = pd.read_csv('Data/recipes_cleaned.csv')
+reviews = pd.read_csv('Data/reviews_cleaned.csv')
+recipes = pd.read_csv('Data/recipes_cleaned.csv')
 
 # Split and sample the datasets
 reviews_train, reviews_test = train_test_split(reviews, test_size=0.3, random_state=42)
