@@ -40,13 +40,14 @@ def model1(selected_author_id, top_n=20):
 
 # Model 2 - Word2Vec Content-Based Filtering
 @st.cache_data
-def average_word_vectors(words, model, vocabulary, num_features):
+def average_word_vectors(_model, words, vocabulary, num_features):
     valid_words = [word for word in words if word in vocabulary]
     if valid_words:
-        feature_vectors = model.wv[valid_words]
+        feature_vectors = _model.wv[valid_words]
         return np.mean(feature_vectors, axis=0)
     else:
         return np.zeros((num_features,), dtype="float32")
+
 
 @st.cache_data
 def model2(selected_author_id, top_n=20):
@@ -79,7 +80,7 @@ def model2(selected_author_id, top_n=20):
     word2vec_num_features = 100
 
     content_data['word2vec_features'] = [
-        average_word_vectors(x, word2vec_model_pkl, vocabulary, word2vec_num_features)
+        average_word_vectors(word2vec_model_pkl, x, vocabulary, word2vec_num_features)
         for x in content_data['tokenized_text']
     ]
 
