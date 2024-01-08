@@ -29,9 +29,6 @@ def home_page():
     st.title('TasteBuddy: Your Personalized Food Recommender')
     st.write("Welcome to TasteBuddy! Your go-to platform for personalized food recommendations. "
             "Discover a world of unique and delightful flavors tailored just for you.")
-    st.image("Resources/Logo3.png", caption='TasteBuddy Logo', use_column_width=True)
-    st.image("Resources/Logo1.png", caption='TasteBuddy Logo', use_column_width=True)
-    st.image("Resources/Logo4.png", caption='TasteBuddy Logo', use_column_width=True)
     st.image("Resources/Logo2.png", caption='TasteBuddy Logo', use_column_width=True)
     selected_author_id = st.selectbox('Selected User: ', get_users(), index=get_users().index(session_state.selected_author_id))
     st.write(f'Name: {get_name(selected_author_id)}')
