@@ -10,7 +10,7 @@ page_options = ["Home Page","User Profile","Algorithm","Hybrid Food Recommender"
 page_selection = st.sidebar.selectbox("Choose Option", page_options)
 
 # Custom Libraries
-from Backend.model2 import model1, model2, final_model, get_users, get_name, get_ratings, get_reviews, get_breakdown, get_recipes
+from Backend.model_streamlit import model1, model2, final_model, get_users, get_name, get_ratings, get_reviews, get_breakdown, get_recipes
 
 # Function to get or create the session state
 def get_session_state():
