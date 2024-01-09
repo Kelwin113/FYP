@@ -13,11 +13,6 @@ import gdown
 # Model 1 - SVD User-Based Collaborate Filtering
 @st.cache_data
 def model1(selected_author_id, top_n=20):
-    # Load the SVD model from the pickle file
-    svd_model_filename = 'Resources/svd_model.pkl'
-    with open(svd_model_filename, 'rb') as svd_file:
-        svd_model_pkl = pickle.load(svd_file)
-
     rated_reviews = reviews_train[reviews_train['AuthorId'] == selected_author_id]
     unrated_reviews = reviews_train[reviews_train['AuthorId'] != selected_author_id]
 
@@ -44,9 +39,19 @@ def model1(selected_author_id, top_n=20):
     return svd_result_df
 
 # Model 2 - Word2Vec Content-Based Filtering
-@st.cache_data 
+@st.cache_data
+def average_word_vectors(_model, words, vocabulary, num_features):
+    valid_words = [word for word in words if word in vocabulary]
+    if valid_words:
+        feature_vectors = _model.wv[valid_words]
+        return np.mean(feature_vectors, axis=0)
+    else:
+        return np.zeros((num_features,), dtype="float32")
+
+
+@st.cache_data
 def model2(selected_author_id, top_n=20):
-    # Create a user profile
+    # Load necessary data
     all_recipe_ids = recipes['RecipeId'].unique()
     author_ratings = reviews[(reviews['AuthorId'] == selected_author_id) & (reviews['RecipeId'].isin(all_recipe_ids))]
     average_ratings = author_ratings.groupby('RecipeId')['Rating'].mean().reset_index()
@@ -58,66 +63,44 @@ def model2(selected_author_id, top_n=20):
         word2vec_model_pkl = pickle.load(word2vec_file)
 
     # Reset index to avoid KeyError
-    sampled_reviews = reviews.sample(frac=0.01, random_state=42)
-    sampled_reviews = sampled_reviews.reset_index(drop=True)
+    sampled_reviews = reviews.sample(frac=0.01, random_state=42).reset_index(drop=True)
 
     # Drop unnecessary columns
     content_data = sampled_reviews[['AuthorId', 'RecipeId', 'Description', 'Review', 'Name', 'Rating']]
 
-    # Drop rows with missing values in the 'Name' columns
+    # Drop rows with missing values in the 'Name' column
     content_data = content_data.dropna(subset=['Name'])
 
     # Tokenize the combined text into words
     content_data['combined_text'] = content_data['Review'].fillna('') + ' ' + content_data['Description'].fillna('') + ' ' + content_data['Rating'].astype(str)
     content_data['tokenized_text'] = content_data['combined_text'].apply(word_tokenize)
 
-    # Function to average word vectors for a document
-    def average_word_vectors(words, model, vocabulary, num_features):
-        feature_vector = np.zeros((num_features,), dtype="float32")
-        nwords = 0.
-        for word in words:
-            if word in vocabulary:
-                nwords = nwords + 1.
-                feature_vector = np.add(feature_vector, model.wv[word])
-        if nwords:
-            feature_vector = np.divide(feature_vector, nwords)
-
-        return feature_vector
-
     # Create a feature matrix by averaging word vectors for each document
     vocabulary = set(word2vec_model_pkl.wv.index_to_key)
-    word2vec_num_features = 100  # Change this to match the vector_size parameter in Word2Vec
+    word2vec_num_features = 100
 
-    content_data['word2vec_features'] = content_data['tokenized_text'].apply(
-        lambda x: average_word_vectors(x, word2vec_model_pkl, vocabulary, word2vec_num_features)
-    )
-
-    # Create a DataFrame with the feature vectors
-    word2vec_features_df = pd.DataFrame(content_data['word2vec_features'].tolist(), index=content_data.index)
-
-    # Concatenate the word2vec_features_df with other relevant columns
-    content_data = pd.concat([content_data, word2vec_features_df], axis=1)
+    content_data['word2vec_features'] = [
+        average_word_vectors(word2vec_model_pkl, x, vocabulary, word2vec_num_features)
+        for x in content_data['tokenized_text']
+    ]
 
     # Calculate cosine similarity between word2vec features
-    cosine_sim_word2vec = linear_kernel(word2vec_features_df, word2vec_features_df)
+    cosine_sim_word2vec = linear_kernel(content_data['word2vec_features'].tolist(), content_data['word2vec_features'].tolist())
 
+    # Function to get top similar recipes with Word2Vec
     def get_top_similar_recipes_word2vec(author_id, user_profile=user_profile_table, cosine_sim=cosine_sim_word2vec,
                                         content_data=content_data, N=top_n):
-        # Get the index of the selected author in the content_data
         idx = content_data[content_data['AuthorId'] == author_id].index
 
         if not idx.empty:
             idx = idx[0]
 
-            # Calculate cosine similarity between Word2Vec features
             sim_scores = list(enumerate(cosine_sim[idx]))
             sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
 
-            # Filter out recipes already reviewed by the selected author
             author_reviews = content_data[content_data['AuthorId'] == author_id]['RecipeId'].tolist()
             sim_scores = [(i, score) for i, score in sim_scores if content_data.iloc[i]['RecipeId'] not in author_reviews]
 
-            # Weigh similarity scores based on user's ratings
             sim_scores = [
                 (i, score * (1 + content_data.iloc[i]['Rating'] - user_profile[user_profile['RecipeId'] ==
                                                                         content_data.iloc[i]['RecipeId']]['Rating'].values[0]))
@@ -126,19 +109,15 @@ def model2(selected_author_id, top_n=20):
 
             sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[:N]
 
-            # Create a DataFrame with the recommendations
             recommended_recipes = pd.DataFrame(columns=content_data.columns)
             seen_recipe_ids = set()
 
             for i, _ in sim_scores:
                 recipe_id = content_data.iloc[i]['RecipeId']
-
-                # Check if the recipe is not already in the recommended_recipes list
                 if recipe_id not in seen_recipe_ids:
                     recommended_recipes = pd.concat([recommended_recipes, content_data.iloc[[i]]])
                     seen_recipe_ids.add(recipe_id)
 
-                # Break if N recommendations are reached
                 if len(recommended_recipes) >= N:
                     break
 
@@ -147,20 +126,122 @@ def model2(selected_author_id, top_n=20):
             print(f"Author with ID {author_id} not found.")
             return pd.DataFrame()
 
-    # Use the updated function to get top similar recipes with Word2Vec
+    # Use the function to get top similar recipes with Word2Vec
     word2vec_result = get_top_similar_recipes_word2vec(selected_author_id)
     word2vec_result_df = word2vec_result[["RecipeId", "Name"]].reset_index(drop=True)
     return word2vec_result_df
 
+# def model2(selected_author_id, top_n=20):
+#     # Create a user profile
+#     all_recipe_ids = recipes['RecipeId'].unique()
+#     author_ratings = reviews[(reviews['AuthorId'] == selected_author_id) & (reviews['RecipeId'].isin(all_recipe_ids))]
+#     average_ratings = author_ratings.groupby('RecipeId')['Rating'].mean().reset_index()
+#     user_profile_table = pd.merge(recipes, average_ratings, on='RecipeId', how='left')[['RecipeId', 'Rating']]
+
+#     # Load the Word2Vec model from the pickle file
+#     word2vec_model_filename = 'Resources/word2vec_model.pkl'
+#     with open(word2vec_model_filename, 'rb') as word2vec_file:
+#         word2vec_model_pkl = pickle.load(word2vec_file)
+
+#     # Reset index to avoid KeyError
+#     sampled_reviews = reviews.sample(frac=0.01, random_state=42)
+#     sampled_reviews = sampled_reviews.reset_index(drop=True)
+
+#     # Drop unnecessary columns
+#     content_data = sampled_reviews[['AuthorId', 'RecipeId', 'Description', 'Review', 'Name', 'Rating']]
+
+#     # Drop rows with missing values in the 'Name' columns
+#     content_data = content_data.dropna(subset=['Name'])
+
+#     # Tokenize the combined text into words
+#     content_data['combined_text'] = content_data['Review'].fillna('') + ' ' + content_data['Description'].fillna('') + ' ' + content_data['Rating'].astype(str)
+#     content_data['tokenized_text'] = content_data['combined_text'].apply(word_tokenize)
+
+#     # Function to average word vectors for a document
+#     def average_word_vectors(words, model, vocabulary, num_features):
+#         feature_vector = np.zeros((num_features,), dtype="float32")
+#         nwords = 0.
+#         for word in words:
+#             if word in vocabulary:
+#                 nwords = nwords + 1.
+#                 feature_vector = np.add(feature_vector, model.wv[word])
+#         if nwords:
+#             feature_vector = np.divide(feature_vector, nwords)
+
+#         return feature_vector
+
+#     # Create a feature matrix by averaging word vectors for each document
+#     vocabulary = set(word2vec_model_pkl.wv.index_to_key)
+#     word2vec_num_features = 100  # Change this to match the vector_size parameter in Word2Vec
+
+#     content_data['word2vec_features'] = content_data['tokenized_text'].apply(
+#         lambda x: average_word_vectors(x, word2vec_model_pkl, vocabulary, word2vec_num_features)
+#     )
+
+#     # Create a DataFrame with the feature vectors
+#     word2vec_features_df = pd.DataFrame(content_data['word2vec_features'].tolist(), index=content_data.index)
+
+#     # Concatenate the word2vec_features_df with other relevant columns
+#     content_data = pd.concat([content_data, word2vec_features_df], axis=1)
+
+#     # Calculate cosine similarity between word2vec features
+#     cosine_sim_word2vec = linear_kernel(word2vec_features_df, word2vec_features_df)
+
+#     def get_top_similar_recipes_word2vec(author_id, user_profile=user_profile_table, cosine_sim=cosine_sim_word2vec,
+#                                         content_data=content_data, N=top_n):
+#         # Get the index of the selected author in the content_data
+#         idx = content_data[content_data['AuthorId'] == author_id].index
+
+#         if not idx.empty:
+#             idx = idx[0]
+
+#             # Calculate cosine similarity between Word2Vec features
+#             sim_scores = list(enumerate(cosine_sim[idx]))
+#             sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+
+#             # Filter out recipes already reviewed by the selected author
+#             author_reviews = content_data[content_data['AuthorId'] == author_id]['RecipeId'].tolist()
+#             sim_scores = [(i, score) for i, score in sim_scores if content_data.iloc[i]['RecipeId'] not in author_reviews]
+
+#             # Weigh similarity scores based on user's ratings
+#             sim_scores = [
+#                 (i, score * (1 + content_data.iloc[i]['Rating'] - user_profile[user_profile['RecipeId'] ==
+#                                                                         content_data.iloc[i]['RecipeId']]['Rating'].values[0]))
+#                 for i, score in sim_scores
+#             ]
+
+#             sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[:N]
+
+#             # Create a DataFrame with the recommendations
+#             recommended_recipes = pd.DataFrame(columns=content_data.columns)
+#             seen_recipe_ids = set()
+
+#             for i, _ in sim_scores:
+#                 recipe_id = content_data.iloc[i]['RecipeId']
+
+#                 # Check if the recipe is not already in the recommended_recipes list
+#                 if recipe_id not in seen_recipe_ids:
+#                     recommended_recipes = pd.concat([recommended_recipes, content_data.iloc[[i]]])
+#                     seen_recipe_ids.add(recipe_id)
+
+#                 # Break if N recommendations are reached
+#                 if len(recommended_recipes) >= N:
+#                     break
+
+#             return recommended_recipes.head(N)
+#         else:
+#             print(f"Author with ID {author_id} not found.")
+#             return pd.DataFrame()
+
+#     # Use the updated function to get top similar recipes with Word2Vec
+#     word2vec_result = get_top_similar_recipes_word2vec(selected_author_id)
+#     word2vec_result_df = word2vec_result[["RecipeId", "Name"]].reset_index(drop=True)
+#     return word2vec_result_df
+
 # Final Hybrid Model
 @st.cache_data 
 def final_model(selected_author_id, svd_result_df, word2vec_result_df, final_n=20):
-    # Load the SVD model from the pickle file
-    svd_model_filename = 'Resources/svd_model.pkl'
-    with open(svd_model_filename, 'rb') as svd_file:
-        svd_model_pkl = pickle.load(svd_file)
-
-    
+   
     # combined_recommendations = [RecipeId for _, RecipeId, _ in svd_result] + word2vec_result['RecipeId'].tolist()
     combined_recommendations = svd_result_df['RecipeId'].tolist() + word2vec_result_df['RecipeId'].tolist()
 
@@ -270,8 +351,27 @@ def get_reviews(selected_author_id, n):
 def get_recipes(result):
     return recipes[recipes['RecipeId'].isin(result['RecipeId'].tolist())]
 
-reviews = pd.read_csv('Data/reviews_cleaned.csv')
-recipes = pd.read_csv('Data/recipes_cleaned.csv')
+url1 = "https://drive.google.com/file/d/1n7rzM6lROJO4UCneA2gXsE3MFTrAuJbQ/view?usp=sharing"
+gdown.download(url=url1, output = 'recipes_cleaned.csv', fuzzy=True)
+
+url2 = "https://drive.google.com/file/d/1_7UYJTO5aH9EMPwWZVWdq2lNk7UwodLL/view?usp=sharing"
+gdown.download(url=url2, output = 'reviews_cleaned.csv', fuzzy=True)
+
+url3 = "https://drive.google.com/file/d/12x6hmh8rRAA9pLxXeQN0csTOQE6QPi0a/view?usp=sharing"
+gdown.download(url=url3, output = 'svd_model.pkl', fuzzy=True)
+
+reviews = pd.read_csv('reviews_cleaned.csv')
+recipes = pd.read_csv('recipes_cleaned.csv')
+
+# Load the SVD model from the pickle file
+svd_model_filename = 'svd_model.pkl'
+with open(svd_model_filename, 'rb') as svd_file:
+    svd_model_pkl = pickle.load(svd_file)
+
+nltk.download('punkt')
+
+# reviews = pd.read_csv('Data/reviews_cleaned.csv')
+# recipes = pd.read_csv('Data/recipes_cleaned.csv')
 
 # Split and sample the datasets
 reviews_train, reviews_test = train_test_split(reviews, test_size=0.3, random_state=42)

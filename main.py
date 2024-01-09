@@ -50,6 +50,7 @@ def user_profile():
     st.write(f'Total Reviews/Ratings: {get_ratings(session_state.selected_author_id)}')
 
     # Plotting the bar chart
+    st.info("Breakdown of Past Ratings")
     ratings = get_breakdown(session_state.selected_author_id)
     labels = ['Rating 1', 'Rating 2', 'Rating 3', 'Rating 4', 'Rating 5']
     bar_chart_data = dict(zip(labels, ratings))
@@ -73,6 +74,7 @@ def algorithm():
 
     # Perform recommendation generation
     if model == 'Content Based Filtering':
+        st.info("Result will be generated using Word2Vec. It identifies similar food items based on cosine similarity scores, capturing semantic relationships between words in description and review to generate word vectors for each food item.")
         if st.button("Recommend"):
             try:
                 # with st.spinner('Starting Your Personalized Food Recommendations...'):
@@ -113,6 +115,7 @@ def algorithm():
                 st.error(f"An error occurred: {str(e)}")
 
     if model == 'Collaborative Filtering':
+        st.info("Results will be generated using SVD. It predicts ratings for unrated items by identifying patterns in user-item interactions, leveraging matrix factorization and latent factors to find similar users.")
         if st.button("Recommend"):
             try:
                 svd_result = model1(session_state.selected_author_id)
@@ -156,6 +159,9 @@ def hybrid_food_recommender():
 
     st.title("Hybrid Food Recommender")
     st.subheader('Step into Your Exclusive and Extraordinary Food Adventure!')
+    with st.expander("ℹ️ Explore More Information"):
+        st.write("Results will combine the results of SVD and Word2Vec to provide a diverse and accurate list of personalized food recommendations, ranked based on predicted ratings from the SVD algorithm.")
+        st.image("Resources/Architecture.png", caption='System Architecture of TasteBuddy', use_column_width=True)
     final_n = st.slider("Top N Recommendations", min_value=5, max_value=20, value=10)
 
     if st.button("Generate"):
@@ -165,7 +171,35 @@ def hybrid_food_recommender():
             hybrid_result = final_model(session_state.selected_author_id, svd_result, word2vec_result)
             st.success("Recommendations generated successfully!")
             st.write(f"Top {final_n} Recommended Food Items for User {session_state.selected_author_id} Using Hybrid Approach:")
-            st.table(hybrid_result.head(final_n))
+            hybrid_result = hybrid_result.head(final_n)
+            st.table(hybrid_result)
+
+            hybrid_result_full = get_recipes(hybrid_result)
+
+            # Display detailed information for each recommended item
+            for index, row in hybrid_result.iterrows():
+                recipe_id = row['RecipeId']
+                hybrid_details = hybrid_result_full[hybrid_result_full['RecipeId'] == recipe_id]
+                expander = st.expander(f"{row['Name']} (Recipe ID: {recipe_id})")
+
+                # Display details in the expander
+                # Display image using the provided link
+                image_link = hybrid_details['Images'].iloc[0]
+                if pd.notna(image_link):  # Check if the value is not NaN
+                    expander.image(image_link, caption=row['Name'], use_column_width=True)
+                expander.write(f"Food Category: {hybrid_details['RecipeCategory'].iloc[0]}")
+
+                # Display nutritional information in a table
+                expander.write("### Nutritional Information:")
+                svd_nutritional_info = hybrid_details[['Calories', 'FatContent', 'SaturatedFatContent', 'CholesterolContent',
+                                            'SodiumContent', 'CarbohydrateContent', 'FiberContent', 'SugarContent',
+                                            'ProteinContent']]
+                expander.table(svd_nutritional_info)
+                expander.write(f"Description: {hybrid_details['Description'].iloc[0]}")
+
+                expander.write("### Recipe Information:")
+                svd_duration_info = hybrid_details[['CookTime','PrepTime','TotalTime']]
+                expander.table(svd_duration_info)
         except Exception as e:
             st.error("Oops! Looks like this algorithm does't work. Please try again later!")
             st.error(f"An error occurred: {str(e)}")
